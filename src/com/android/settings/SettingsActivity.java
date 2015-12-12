@@ -37,6 +37,7 @@ import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.content.res.XmlResourceParser;
 import android.nfc.NfcAdapter;
+import android.nfc.Tag;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -88,9 +89,13 @@ import com.android.settings.deviceinfo.PrivateVolumeForget;
 import com.android.settings.deviceinfo.PrivateVolumeSettings;
 import com.android.settings.deviceinfo.PublicVolumeSettings;
 import com.android.settings.deviceinfo.StorageSettings;
-import com.android.settings.fuelgauge.BatterySaverSettings;
 import com.android.settings.fuelgauge.PowerUsageDetail;
 import com.android.settings.fuelgauge.PowerUsageSummary;
+import com.android.settings.livedisplay.LiveDisplay;
+import com.android.settings.notification.OtherSoundSettings;
+import com.android.settings.profiles.NFCProfileTagCallback;
+import com.android.settings.search.DynamicIndexableContentMonitor;
+import com.android.settings.search.Index;
 import com.android.settings.inputmethod.InputMethodAndLanguageSettings;
 import com.android.settings.inputmethod.KeyboardLayoutPickerFragment;
 import com.android.settings.inputmethod.SpellCheckersSettings;
@@ -114,6 +119,7 @@ import com.android.settings.print.PrintJobSettingsFragment;
 import com.android.settings.print.PrintSettingsFragment;
 import com.android.settings.search.DynamicIndexableContentMonitor;
 import com.android.settings.search.Index;
+import com.android.settings.privacyguard.PrivacyGuardPrefs;
 import com.android.settings.sim.SimSettings;
 import com.android.settings.tts.TextToSpeechSettings;
 import com.android.settings.users.UserSettings;
@@ -251,6 +257,8 @@ public class SettingsActivity extends Activity
     private CharSequence mInitialTitle;
     private int mInitialTitleResId;
 
+    private NFCProfileTagCallback mNfcProfileCallback;
+
     // Show only these settings for restricted users
     private int[] SETTINGS_FOR_RESTRICTED = {
             R.id.wireless_section,
@@ -278,7 +286,8 @@ public class SettingsActivity extends Activity
             R.id.print_settings,
             R.id.nfc_payment_settings,
             R.id.home_settings,
-            R.id.dashboard
+            R.id.dashboard,
+            R.id.privacy_settings_cyanogenmod
     };
 
     private static final String[] ENTRY_FRAGMENTS = {
@@ -339,7 +348,6 @@ public class SettingsActivity extends Activity
             ChooseLockPassword.ChooseLockPasswordFragment.class.getName(),
             ChooseLockPattern.ChooseLockPatternFragment.class.getName(),
             InstalledAppDetails.class.getName(),
-            BatterySaverSettings.class.getName(),
             AppNotificationSettings.class.getName(),
             OtherSoundSettings.class.getName(),
             ApnSettings.class.getName(),
@@ -354,6 +362,8 @@ public class SettingsActivity extends Activity
             ProcessStatsSummary.class.getName(),
             DrawOverlayDetails.class.getName(),
             WriteSettingsDetails.class.getName(),
+            LiveDisplay.class.getName(),
+            com.android.settings.cyanogenmod.PrivacySettings.class.getName()
     };
 
 
@@ -1221,7 +1231,7 @@ public class SettingsActivity extends Activity
     private void updateTilesList(List<DashboardCategory> target) {
         final boolean showDev = mDevelopmentPreferences.getBoolean(
                 DevelopmentSettings.PREF_SHOW,
-                android.os.Build.TYPE.equals("eng") || android.os.Build.TYPE.equals("userdebug"));
+                android.os.Build.TYPE.equals("eng"));
 
         final UserManager um = (UserManager) getSystemService(Context.USER_SERVICE);
 
@@ -1240,6 +1250,11 @@ public class SettingsActivity extends Activity
                 id = (int) tile.id;
                 if (id == R.id.operator_settings || id == R.id.manufacturer_settings) {
                     if (!Utils.updateTileToSpecificActivityFromMetaDataOrRemove(this, tile)) {
+                        removeTile = true;
+                    }
+                } else if (id == R.id.device_specific_gesture_settings) {
+                    if (!Utils.updateTileToSpecificActivityFromMetaDataOrRemove(this, tile,
+                            false)) {
                         removeTile = true;
                     }
                 } else if (id == R.id.wifi_settings) {
@@ -1297,6 +1312,16 @@ public class SettingsActivity extends Activity
                 } else if (id == R.id.development_settings) {
                     if (!showDev || um.hasUserRestriction(
                             UserManager.DISALLOW_DEBUGGING_FEATURES)) {
+                        removeTile = true;
+                    }
+                } else if (id == R.id.google_settings) {
+                    // Embedding into Settings is supported from Google Settings
+                    boolean supported = false;
+                    try {
+                        supported = (getPackageManager().getPackageInfo("com.google.android.gms", 0).versionCode >= 1);
+                    } catch (PackageManager.NameNotFoundException e) {
+                    }
+                    if (!supported) {
                         removeTile = true;
                     }
                 } else if (id == R.id.supersu_settings) {
@@ -1535,4 +1560,21 @@ public class SettingsActivity extends Activity
     public void setResultIntentData(Intent resultIntentData) {
         mResultIntentData = resultIntentData;
     }
+
+    public void setNfcProfileCallback(NFCProfileTagCallback callback) {
+        mNfcProfileCallback = callback;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(intent.getAction())) {
+            Tag detectedTag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+            if (mNfcProfileCallback != null) {
+                mNfcProfileCallback.onTagRead(detectedTag);
+            }
+            return;
+        }
+        super.onNewIntent(intent);
+    }
+
 }

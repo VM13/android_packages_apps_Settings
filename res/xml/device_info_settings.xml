@@ -41,6 +41,13 @@
                     android:targetClass="com.android.settings.deviceinfo.Status" />
         </PreferenceScreen>
 
+        <!-- Manual -->
+        <PreferenceScreen
+                android:key="manual"
+                android:title="@string/manual">
+            <intent android:action="android.settings.SHOW_MANUAL" />
+        </PreferenceScreen>
+
         <!-- Legal Information -->
         <PreferenceScreen
                 android:key="container"
@@ -75,6 +82,12 @@
                 style="?android:preferenceInformationStyle"
                 android:title="@string/mod_version"
                 android:summary="@string/mod_version_default" />
+
+        <!-- CyanogenMod API Version -->
+        <Preference android:key="mod_api_level"
+                style="?android:preferenceInformationStyle"
+                android:title="@string/mod_api_level"
+                android:summary="@string/mod_api_level_default" />
 
         <!-- Security patch level -->
         <Preference android:key="security_patch"
