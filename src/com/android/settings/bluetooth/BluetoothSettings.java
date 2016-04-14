@@ -18,6 +18,8 @@ package com.android.settings.bluetooth;
 
 import static android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH;
 
+import android.app.ActionBar;
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
@@ -25,6 +27,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.preference.Preference;
@@ -34,13 +37,17 @@ import android.preference.PreferenceScreen;
 import android.provider.Settings;
 import android.text.Spannable;
 import android.text.style.TextAppearanceSpan;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup.LayoutParams;
 import android.widget.TextView;
+import android.widget.Toolbar;
 
 import com.android.internal.logging.MetricsLogger;
 import com.android.settings.LinkifyUtils;
@@ -69,6 +76,7 @@ public final class BluetoothSettings extends DeviceListPreferenceFragment implem
     private static final int MENU_ID_SCAN = Menu.FIRST;
     private static final int MENU_ID_RENAME_DEVICE = Menu.FIRST + 1;
     private static final int MENU_ID_SHOW_RECEIVED = Menu.FIRST + 2;
+    private static final int MENU_ID_ACCEPT_ALL_FILES = Menu.FIRST + 3;
 
     /* Private intent to show the list of received files */
     private static final String BTOPP_ACTION_OPEN_RECEIVED_FILES =
@@ -146,6 +154,59 @@ public final class BluetoothSettings extends DeviceListPreferenceFragment implem
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        Activity activity = getActivity();
+        float titleTextSize;
+        int actionBarHeight;
+        int switchBarHeight;
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            titleTextSize = activity.getResources().getDimensionPixelSize(
+                    R.dimen.bluetooth_landscape_title_textsize);
+            switchBarHeight = activity.getResources().getDimensionPixelSize(
+                    R.dimen.bluetooth_landscape_switchbar_height);
+            actionBarHeight = activity.getResources().getDimensionPixelSize(
+                    R.dimen.bluetooth_landscape_actionbar_height);
+        } else {
+            titleTextSize = activity.getResources().getDimensionPixelSize(
+                    R.dimen.bluetooth_portrait_title_textsize);
+            switchBarHeight = activity.getResources().getDimensionPixelSize(
+                    R.dimen.bluetooth_portrait_switchbar_height);
+            actionBarHeight = activity.getResources().getDimensionPixelSize(
+                    R.dimen.bluetooth_portrait_switchbar_height);
+        }
+        resetBarSize(titleTextSize, actionBarHeight, switchBarHeight);
+    }
+
+    private void resetBarSize(float titleTextSize, int actionBarHeight, int switchBarHeight) {
+        Activity activity = getActivity();
+        DisplayMetrics displayMetrics = Resources.getSystem().getDisplayMetrics();
+        int titleId = Resources.getSystem().getIdentifier("action_bar", "id", "android");
+        Toolbar toolbar = (Toolbar) activity.getWindow().findViewById(titleId);
+        TextView title = null;
+        if (toolbar != null) {
+            LayoutParams layoutParams = toolbar.getLayoutParams();
+            layoutParams.height = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
+                    actionBarHeight, displayMetrics);
+            for (int i = 0; i < toolbar.getChildCount(); ++i) {
+                if (toolbar.getChildAt(i) instanceof TextView) {
+                    title = (TextView) toolbar.getChildAt(i);
+                }
+                Toolbar.LayoutParams childLayoutParams = (Toolbar.LayoutParams) toolbar.getChildAt(
+                        i).getLayoutParams();
+                childLayoutParams.gravity = Gravity.CENTER_VERTICAL;
+            }
+        }
+        if (title != null)
+            title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, titleTextSize);
+        if (mSwitchBar != null) {
+            LayoutParams layoutParams = mSwitchBar.getLayoutParams();
+            layoutParams.height = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
+                    switchBarHeight, displayMetrics);
+        }
+    }
+
+    @Override
     public void onDestroyView() {
         super.onDestroyView();
 
@@ -191,7 +252,9 @@ public final class BluetoothSettings extends DeviceListPreferenceFragment implem
         }
 
         // Make the device only visible to connected devices.
-        mLocalAdapter.setScanMode(BluetoothAdapter.SCAN_MODE_CONNECTABLE);
+        if (mLocalAdapter != null) {
+            mLocalAdapter.setScanMode(BluetoothAdapter.SCAN_MODE_CONNECTABLE);
+        }
 
         if (isUiRestricted()) {
             return;
@@ -210,6 +273,10 @@ public final class BluetoothSettings extends DeviceListPreferenceFragment implem
         boolean isDiscovering = mLocalAdapter.isDiscovering();
         int textId = isDiscovering ? R.string.bluetooth_searching_for_devices :
             R.string.bluetooth_search_for_devices;
+
+        boolean isAcceptAllFilesEnabled = Settings.System.getInt(getContentResolver(),
+                Settings.System.BLUETOOTH_ACCEPT_ALL_FILES, 0) == 1;
+
         menu.add(Menu.NONE, MENU_ID_SCAN, 0, textId)
                 .setEnabled(bluetoothIsEnabled && !isDiscovering)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
@@ -217,6 +284,10 @@ public final class BluetoothSettings extends DeviceListPreferenceFragment implem
                 .setEnabled(bluetoothIsEnabled)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         menu.add(Menu.NONE, MENU_ID_SHOW_RECEIVED, 0, R.string.bluetooth_show_received_files)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        menu.add(Menu.NONE, MENU_ID_ACCEPT_ALL_FILES, 0, R.string.bluetooth_accept_all_files)
+                .setCheckable(true)
+                .setChecked(isAcceptAllFilesEnabled)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         super.onCreateOptionsMenu(menu, inflater);
     }
@@ -241,6 +312,13 @@ public final class BluetoothSettings extends DeviceListPreferenceFragment implem
                 MetricsLogger.action(getActivity(), MetricsLogger.ACTION_BLUETOOTH_FILES);
                 Intent intent = new Intent(BTOPP_ACTION_OPEN_RECEIVED_FILES);
                 getActivity().sendBroadcast(intent);
+                return true;
+
+            case MENU_ID_ACCEPT_ALL_FILES:
+                item.setChecked(!item.isChecked());
+                Settings.System.putInt(getContentResolver(),
+                        Settings.System.BLUETOOTH_ACCEPT_ALL_FILES,
+                        item.isChecked() ? 1 : 0);
                 return true;
         }
         return super.onOptionsItemSelected(item);

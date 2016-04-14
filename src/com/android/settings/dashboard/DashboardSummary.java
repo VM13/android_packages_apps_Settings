@@ -35,6 +35,7 @@ import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import com.android.internal.logging.MetricsLogger;
@@ -42,6 +43,7 @@ import com.android.settings.HelpUtils;
 import com.android.settings.InstrumentedFragment;
 import com.android.settings.R;
 import com.android.settings.SettingsActivity;
+import com.android.settings.widget.SwitchBar;
 
 import java.util.List;
 
@@ -158,7 +160,8 @@ public class DashboardSummary extends InstrumentedFragment {
 
                 DashboardTileView tileView = new DashboardTileView(context);
                 updateTileView(context, res, tile, tileView.getImageView(),
-                        tileView.getTitleTextView(), tileView.getStatusTextView());
+                        tileView.getTitleTextView(), tileView.getStatusTextView(),
+                        tileView.getSwitchView());
 
                 tileView.setTile(tile);
 
@@ -173,7 +176,7 @@ public class DashboardSummary extends InstrumentedFragment {
     }
 
     private void updateTileView(Context context, Resources res, DashboardTile tile,
-            ImageView tileIcon, TextView tileTextView, TextView statusTextView) {
+            ImageView tileIcon, TextView tileTextView, TextView statusTextView, Switch switchBar) {
 
         if (!TextUtils.isEmpty(tile.iconPkg)) {
             try {
@@ -181,10 +184,16 @@ public class DashboardSummary extends InstrumentedFragment {
                         .getResourcesForApplication(tile.iconPkg).getDrawable(tile.iconRes, null);
                 if (!tile.iconPkg.equals(context.getPackageName()) && drawable != null) {
                     // If this drawable is coming from outside Settings, tint it to match the color.
-                    TypedValue tintColor = new TypedValue();
-                    context.getTheme().resolveAttribute(com.android.internal.R.attr.colorAccent,
-                            tintColor, true);
-                    drawable.setTint(tintColor.data);
+                    TypedValue tintColorValue = new TypedValue();
+                    context.getResources().getValue(R.color.external_tile_icon_tint_color,
+                            tintColorValue, true);
+                    // If tintColorValue is TYPE_ATTRIBUTE, resolve it
+                    if (tintColorValue.type == TypedValue.TYPE_ATTRIBUTE) {
+                        context.getTheme().resolveAttribute(tintColorValue.data,
+                                tintColorValue, true);
+                    }
+                     drawable.setTintMode(android.graphics.PorterDuff.Mode.SRC_ATOP);
+                     drawable.setTint(tintColorValue.data);
                 }
                 tileIcon.setImageDrawable(drawable);
             } catch (NameNotFoundException | Resources.NotFoundException e) {
@@ -206,6 +215,12 @@ public class DashboardSummary extends InstrumentedFragment {
             statusTextView.setText(summary);
         } else {
             statusTextView.setVisibility(View.GONE);
+        }
+
+        if (tile.switchControl != null) {
+            switchBar.setVisibility(View.VISIBLE);
+        } else {
+            switchBar.setVisibility(View.GONE);
         }
     }
 

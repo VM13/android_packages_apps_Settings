@@ -65,6 +65,7 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
     private static final String FILENAME_PROC_VERSION = "/proc/version";
     private static final String FILENAME_MSV = "/sys/board_properties/soc/msv";
 
+    private static final String KEY_MANUAL = "manual";
     private static final String KEY_REGULATORY_INFO = "regulatory_info";
     private static final String KEY_SYSTEM_UPDATE_SETTINGS = "system_update_settings";
     private static final String PROPERTY_URL_SAFETYLEGAL = "ro.url.safetylegal";
@@ -83,6 +84,7 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
     private static final String KEY_SAFETY_LEGAL = "safetylegal";
     private static final String KEY_MOD_VERSION = "mod_version";
     private static final String KEY_MOD_BUILD_DATE = "build_date";
+    private static final String KEY_MOD_API_LEVEL = "mod_api_level";
 
     static final int TAPS_TO_BE_A_DEVELOPER = 7;
 
@@ -129,11 +131,12 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         setStringSummary(KEY_DEVICE_MODEL, Build.MODEL);
         setStringSummary(KEY_BUILD_NUMBER, Build.DISPLAY);
         findPreference(KEY_BUILD_NUMBER).setEnabled(true);
-        setStringSummary(KEY_KERNEL_VERSION, getFormattedKernelVersion());
-        findPreference(KEY_KERNEL_VERSION).setEnabled(true);
-        setValueSummary(KEY_MOD_VERSION, "ro.cm.display.version");
+        findPreference(KEY_KERNEL_VERSION).setSummary(getFormattedKernelVersion());
+        setValueSummary(KEY_MOD_VERSION, cyanogenmod.os.Build.CYANOGENMOD_DISPLAY_VERSION);
         findPreference(KEY_MOD_VERSION).setEnabled(true);
         setValueSummary(KEY_MOD_BUILD_DATE, "ro.build.date");
+        setExplicitValueSummary(KEY_MOD_API_LEVEL, constructApiLevelString());
+        findPreference(KEY_MOD_API_LEVEL).setEnabled(true);
 
         if (!SELinux.isSELinuxEnabled()) {
             String status = getResources().getString(R.string.selinux_status_disabled);
@@ -186,9 +189,13 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         removePreferenceIfBoolFalse(KEY_UPDATE_SETTING,
                 R.bool.config_additional_system_update_setting_enable);
 
-        // Remove regulatory information if none present.
+        // Remove manual entry if none present.
+        removePreferenceIfBoolFalse(KEY_MANUAL, R.bool.config_show_manual);
+
+        // Remove regulatory information if none present or config_show_regulatory_info is disabled
         final Intent intent = new Intent(Settings.ACTION_SHOW_REGULATORY_INFO);
-        if (getPackageManager().queryIntentActivities(intent, 0).isEmpty()) {
+        if (getPackageManager().queryIntentActivities(intent, 0).isEmpty()
+                || !getResources().getBoolean(R.bool.config_show_regulatory_info)) {
             Preference pref = findPreference(KEY_REGULATORY_INFO);
             if (pref != null) {
                 getPreferenceScreen().removePreference(pref);
@@ -207,8 +214,7 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
 
     @Override
     public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
-        String prefKey = preference.getKey();
-        if (prefKey.equals(KEY_FIRMWARE_VERSION)) {
+        if (preference.getKey().equals(KEY_FIRMWARE_VERSION)) {
             System.arraycopy(mHits, 1, mHits, 0, mHits.length-1);
             mHits[mHits.length-1] = SystemClock.uptimeMillis();
             if (mHits[0] >= (SystemClock.uptimeMillis()-500)) {
@@ -243,7 +249,7 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
                     if (mDevHitToast != null) {
                         mDevHitToast.cancel();
                     }
-                    mDevHitToast = Toast.makeText(getActivity(), R.string.show_dev_on,
+                    mDevHitToast = Toast.makeText(getActivity(), R.string.show_dev_on_cm,
                             Toast.LENGTH_LONG);
                     mDevHitToast.show();
                     // This is good time to index the Developer Options
@@ -257,7 +263,7 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
                         mDevHitToast.cancel();
                     }
                     mDevHitToast = Toast.makeText(getActivity(), getResources().getQuantityString(
-                            R.plurals.show_dev_countdown, mDevHitCountdown, mDevHitCountdown),
+                            R.plurals.show_dev_countdown_cm, mDevHitCountdown, mDevHitCountdown),
                             Toast.LENGTH_SHORT);
                     mDevHitToast.show();
                 }
@@ -265,15 +271,12 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
                 if (mDevHitToast != null) {
                     mDevHitToast.cancel();
                 }
-                mDevHitToast = Toast.makeText(getActivity(), R.string.show_dev_already,
+                mDevHitToast = Toast.makeText(getActivity(), R.string.show_dev_already_cm,
                         Toast.LENGTH_LONG);
                 mDevHitToast.show();
             }
         } else if (preference.getKey().equals(KEY_DEVICE_FEEDBACK)) {
             sendFeedback();
-        } else if (prefKey.equals(KEY_KERNEL_VERSION)) {
-            setStringSummary(KEY_KERNEL_VERSION, getKernelVersion());
-            return true;
         } else if(preference.getKey().equals(KEY_SYSTEM_UPDATE_SETTINGS)) {
             CarrierConfigManager configManager =
                     (CarrierConfigManager) getSystemService(Context.CARRIER_CONFIG_SERVICE);
@@ -348,6 +351,14 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         }
     }
 
+    private void setExplicitValueSummary(String preference, String value) {
+        try {
+            findPreference(preference).setSummary(value);
+        } catch (RuntimeException e) {
+            // No recovery
+        }
+    }
+
     private void sendFeedback() {
         String reporterPackage = getFeedbackReporterPackage(getActivity());
         if (TextUtils.isEmpty(reporterPackage)) {
@@ -373,20 +384,6 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         }
     }
 
-    private String getKernelVersion() {
-        String procVersionStr;
-        try {
-            procVersionStr = readLine(FILENAME_PROC_VERSION);
-            return procVersionStr;
-        } catch (IOException e) {
-            Log.e(LOG_TAG,
-                "IO Exception when getting kernel version for Device Info screen",
-                e);
-
-            return "Unavailable";
-        }
-    }
- 
     public static String getFormattedKernelVersion() {
         try {
             return formatKernelVersion(readLine(FILENAME_PROC_VERSION));
@@ -398,6 +395,14 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
 
             return "Unavailable";
         }
+    }
+
+    private static String constructApiLevelString() {
+        int sdkInt = cyanogenmod.os.Build.CM_VERSION.SDK_INT;
+        StringBuilder builder = new StringBuilder();
+        builder.append(cyanogenmod.os.Build.getNameForSDKInt(sdkInt))
+                .append(" (" + sdkInt + ")");
+        return builder.toString();
     }
 
     public static String formatKernelVersion(String rawKernelVersion) {
