@@ -81,7 +81,8 @@
                 android:targetClass="com.android.systemui.tuner.TunerActivity" />
          </PreferenceScreen>
 
-    <PreferenceScreen
+         <!-- App Circle Sidebar -->
+         <PreferenceScreen
                 android:id="@+id/app_circle_sidebar"
                 android:title="@string/app_circle_bar_title"
                 android:summary="@string/app_circle_sidebar_summary_real"
