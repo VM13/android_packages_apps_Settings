@@ -81,6 +81,13 @@
                 android:targetClass="com.android.systemui.tuner.TunerActivity" />
          </PreferenceScreen>
 
+         <!-- App Circle Sidebar -->
+         <PreferenceScreen
+                android:id="@+id/app_circle_sidebar"
+                android:title="@string/app_circle_bar_title"
+                android:summary="@string/app_circle_sidebar_summary_real"
+                android:fragment="com.android.settings.vm13.AppCircleSidebar" />
+        
         <!-- Navbar Edits -->
         <PreferenceCategory
         android:key="navigation_bar_general_category"
