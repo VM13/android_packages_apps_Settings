@@ -44,10 +44,12 @@
             android:persistent="false" />
 
     <!-- Volume adjust sounds -->
-    <com.android.settings.cyanogenmod.CMSystemSettingSwitchPreference
-            android:key="volume_adjust_sounds_enabled"
+    <SwitchPreference
+            android:key="volume_adjust_sounds"
             android:title="@string/volume_adjust_sounds_title"
-            android:defaultValue="true" />"
+            android:switchTextOff=""
+            android:switchTextOn=""
+            android:persistent="false" />
 
     <!-- Touch sounds -->
     <SwitchPreference
